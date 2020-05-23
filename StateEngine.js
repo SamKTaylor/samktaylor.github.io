@@ -8,8 +8,8 @@ var TargetLastY=0
 var CharState="Combat"
 var PreviousCharState="Idle"
 
-var TownX=-288;
-var TownY=-34;
+var MerchantX=-288;
+var MerchantY=-34;
 var MerchantCharName = "Thelandra";
 
 var BattleX=643;
@@ -17,7 +17,7 @@ var BattleY=1819;
 
 var HealthSafetyPercentage=70;
 
-var DepositLimit=400000;
+var DepositLimit=51000;
 
 function Kite(target)
 {
@@ -54,14 +54,6 @@ function Get_New_Target()
         target=current;
     }
     return target;
-}
-
-function CheckTrade()
-{
-	if (character.gold > 50000)
-	{
-		send_gold("Thelandra", character.gold - 50000)
-	}
 }
 
 function DoCombat()
@@ -139,14 +131,14 @@ function Trade()
 {
 	if (character.gold > 50000)
 	{
-		send_gold("Thelandra", character.gold - 50000)
+		send_gold(MerchantCharName, character.gold - 50000)
 	}
 
 	for(slot=0; slot<42; slot++)
 	{
 		var item = character.items[slot];
 		if (!item) continue;
-		send_item("Thelandra",slot,item.q);
+		send_item(MerchantCharName,slot,item.q);
 	}
 }
 
@@ -155,21 +147,33 @@ function Set_Previous_CharState()
 	CharState = PreviousCharState;
 }
 
-function GoToTown()
+function GoToMerchant()
 {
 	if (!character.moving)
 	{
-		if (Math.round(character.real_x) == TownX && Math.round(character.real_y) == TownY)
+		if (Math.round(character.real_x) == MerchantX && Math.round(character.real_y)== MerchantY){
 		{
 			Trade();
 			CharState="ReturnToBattle";
 		}
-		else
-		{
+		else if (Math.round(character.real_x) == 0 && Math.round(character.real_y)== 0){
+		{ 
 			PreviousCharState = CharState;
 			CharState = "Calculating";
-			smart_move({x: TownX, y: TownY}, Set_Previous_CharState);
+			smart_move({x: MerchantX, y: MerchantY}, Set_Previous_CharState);
 		}
+	}
+}
+
+function TeleportToTown()
+{
+	if (!character.moving)
+	{
+		if (Math.round(character.real_x) == 0 && Math.round(character.real_y) 			== 0){
+			use_skill("use_town", character);
+			CharState="GoToMerchant()";
+		}
+			
 	}
 }
 
@@ -209,6 +213,9 @@ setInterval(function(){
 		case "Calculating":
 			CheckHpMP();
 		break;
+		case "TeleportToTown":
+			TeleportToTown();
+			break;
 		default:
 		CharState = "Combat";
 	}
