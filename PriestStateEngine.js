@@ -4,16 +4,7 @@ var TargetCaller = "McGreebTanks"
 function Get_Party_Target()
 {
 	Tank = get_player(TargetCaller);
-	var target;
-	
-	if(Tank)
-	{
-		if (Tank.target)
-		{
-			target=Tank.target;
-		}
-	}
-
+	var target=get_monster(Tank.target);
     return target;
 }
 
@@ -27,7 +18,7 @@ function Stay_Near_Tank(target)
 
 function Heal_Tank(Tank)
 {
-	if( (Tank.hp / Tank.max_hp) * 100 < 60)
+	if( (Tank.max_hp - Tank.hp) > 500)
 	{
 		if(character.mp > 400)
 		{
@@ -56,13 +47,19 @@ function DoCombat()
 	{
 		Stay_Near_Tank(Tank);
 		Heal_Tank(Tank);
+	}
+	
+	var target = get_targeted_monster();
+	
+	if(!target)
+	{ 
+		target=Get_Party_Target();
+		if(character.mp > 400)
+		{
+			use_skill('curse', target);
 		}
-	
-	
-	if(character.rip || is_moving(character)) return;
-	
-	target = Get_Party_Target();
-	
+	}
+		
 }
 
 setInterval(function(){

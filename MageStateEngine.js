@@ -12,6 +12,8 @@ var MerchantX=-288;
 var MerchantY=-34;
 var MerchantCharName = "Thelandra";
 
+var TargetCaller = "McGreebTanks"
+
 var BattleX=643;
 var BattleY=1819;
 
@@ -56,29 +58,40 @@ function Get_New_Target()
     return target;
 }
 
+function Get_Party_Target()
+{
+	Tank = get_player(TargetCaller);
+	var target=get_monster(Tank.target);
+    return target;
+}
+
+function Stay_Near_Tank(target)
+{
+	if(!is_in_range(target))
+	{
+		move(target.real_x -15,target.real_y);
+	}
+}
+
 function DoCombat()
 {
 	
-	CheckHpMP();
+	var Tank=get_player(TargetCaller);
 	
+	CheckHpMP();
+	if(Tank)
+	{
+		Stay_Near_Tank(Tank);
+	}
 	
 	if(!attack_mode || character.rip || is_moving(character)) return;
 	
-	var target=get_targeted_monster();
+	var target = get_targeted_monster();
 	
 	if(!target)
-	{ //no current target, lets check if we should heal or go back to town
-		if (character.gold > DepositLimit)
-		{
-			CharState = "TeleportToTown";
-			return;
-		}else if((character.hp / character.max_hp) * 100 < HealthSafetyPercentage)
-		{
-			CharState = "HealthRegen";
-			return;
-		}
-		// no need to deposit or heal, so lets get a new target.
-		target = Get_New_Target();
+	{ 
+		target=Get_Party_Target();
+			
 		if (target)
 		{
 			TargetLastX = target.x;
@@ -86,22 +99,8 @@ function DoCombat()
 		}
 	}
 	
-	if(!target)
+	if(can_attack(target))
 	{
-		CharState="ReturnToBattle";
-		return;
-	}
-	
-	if(!is_in_range(target))
-	{
-		move(
-			character.x+(target.x-character.x)/2,
-			character.y+(target.y-character.y)/2
-			);
-	}
-	else if(can_attack(target))
-	{
-		Kite(target);
 		if (character.mp > 20)
 		{
 			attack(target);
@@ -113,7 +112,6 @@ function DoCombat()
 				use_skill("burst", target);
 			}
 		}
-		
 	}
 }
 
