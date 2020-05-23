@@ -17,7 +17,7 @@ var BattleY=1819;
 
 var HealthSafetyPercentage=70;
 
-var DepositLimit=51000;
+var DepositLimit=200000;
 
 function Kite(target)
 {
@@ -70,7 +70,7 @@ function DoCombat()
 	{ //no current target, lets check if we should heal or go back to town
 		if (character.gold > DepositLimit)
 		{
-			CharState = "DepositGoods";
+			CharState = "TeleportToTown";
 			return;
 		}else if((character.hp / character.max_hp) * 100 < HealthSafetyPercentage)
 		{
@@ -151,12 +151,12 @@ function GoToMerchant()
 {
 	if (!character.moving)
 	{
-		if (Math.round(character.real_x) == MerchantX && Math.round(character.real_y)== MerchantY){
+		if (Math.round(character.real_x) == MerchantX && Math.round(character.real_y)== MerchantY)
 		{
 			Trade();
 			CharState="ReturnToBattle";
 		}
-		else if (Math.round(character.real_x) == 0 && Math.round(character.real_y)== 0){
+		else if (Math.round(character.real_x) == 0 && Math.round(character.real_y)== 0)
 		{ 
 			PreviousCharState = CharState;
 			CharState = "Calculating";
@@ -169,11 +169,8 @@ function TeleportToTown()
 {
 	if (!character.moving)
 	{
-		if (Math.round(character.real_x) == 0 && Math.round(character.real_y) 			== 0){
-			use_skill("use_town", character);
-			CharState="GoToMerchant()";
-		}
-			
+		use_skill("use_town", character);
+		CharState="DepositGoods";
 	}
 }
 
@@ -205,7 +202,7 @@ setInterval(function(){
 			DoHeal();
 		break;
 		case "DepositGoods":
-			GoToTown();
+			GoToMerchant();
 		break;
 		case "ReturnToBattle":
 			GoToBattle();
