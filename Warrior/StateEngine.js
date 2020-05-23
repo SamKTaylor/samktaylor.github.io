@@ -19,17 +19,15 @@ var HealthSafetyPercentage=60;
 
 var DepositLimit=200000;
 
-var partyHP = {};
-
 var log = true;
 
 function RegenSkills(){
 	if(!character.rip)	
 	{
-		if(!is_on_cooldown("regen_mp") && character.hp < character.max_hp - 50){
+		if(!is_on_cooldown("regen_mp") && character.mp < character.max_mp - 100){
 			use_skill("regen_mp");
 		}else{
-			if(!is_on_cooldown("regen_hp") && character.mp < character.max_mp - 100){
+			if(!is_on_cooldown("regen_hp") && character.hp < character.max_hp - 100){
 				use_skill("regen_hp");
 			}
 		}
@@ -145,48 +143,71 @@ function TeleportToTown()
 	}
 }
 
-function updatePartyStatus(){
-	
+function partyNameArray(){
+
+    var array = [];
+
     for(id in parent.party)
     {
         var current = get_entity(id);
-		if(!character.me){
-			var PartyMember = get_player(current.name);
-        
-			if(partyHP.hasOwnProperty(PartyMember.name)){
-				if(partyHP[PartyMember.name] > PartyMember.hp){
-					console.log(PartyMember.name + " Took damage");
-
-					CharState = "Assist";
-					AssistTarget = PartyMember;
-				}
-			}
-
-			partyHP[PartyMember.name] = PartyMember.hp;
-		}
+		if(!current.me){
+            array.push(character.name);
+        }
     }
+
+    return array;
+}
+
+
+function CheckAgro(){
+
+    target = null;
+	for(id in parent.entities)
+    {
+        var current=parent.entities[id];
+        if(current.type!="monster" || !current.visible || current.dead) continue;
+
+        if(current.hasOwnProperty("target")){
+            var is_us = false;
+
+            var us = partyNameArray();
+
+            for(var i=0; i<us.length; i++){
+                if(current.target = us[i]){
+                    target = current;
+                    CharState = "Assist";
+                }
+            }
+        }
+    }
+    return target;
+
 }
 
 function DoAssist(){
+	
+	
 	if(!is_on_cooldown("charge")){
 		use_skill("charge");
 	}
 	move(
-		AssistTarget.x,
-		AssistTarget.y
+		target.x,
+		target.y
 	);
-	var target=get_nearest_monster();
-	if(!is_on_cooldown("taunt")){
-		use_skill("taunt", target);
-		
-	}
-	
-	CharState = "Combat";
+
+    if(can_attack(target)) {
+        if(!is_on_cooldown("taunt")){
+            use_skill("taunt", target);
+        }
+        attack(target);
+        CharState = "Combat";
+    }
+    CharState = "Combat";
 }
 
 setInterval(function(){
 	
-	updatePartyStatus();
+	CheckAgro();
 	
     loot();
     RegenSkills();
@@ -210,6 +231,8 @@ setInterval(function(){
 		default:
 		CharState = "Combat";
 	}
+	
+	RegenSkills();
 
 },1000/4); // Loops every 1/4 seconds.
 
