@@ -72,6 +72,16 @@ const updateStatistics = () => {
   MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT - 99999, character.max_mp * 0.8);
 };
 
+const isRogue = () => {
+  return character.ctype == "rogue";
+}
+const isWarrior = () => {
+  return character.ctype == "warrior";
+}
+const isPriest = () => {
+  return character.ctype == "priest";
+}
+
 const healing = () => {
   if (isDead()) return;
 
@@ -110,13 +120,13 @@ const goHome = () => {
 };
 
 const canUse = (skill, standardCooldownTime) => {
-  if (character.ctype != "rogue" && (
+  if (!isRogue() && (
       skill == "invis"
     ) ||
-    character.ctype != "warrior" && (
+    !isWarrior() && (
       skill == "charge"
     ) ||
-    character.ctype != "priest" && (
+    !isPriest() && (
       skill == "heal" ||
       skill == "partyheal" ||
       skill == "revive"
@@ -144,21 +154,33 @@ const distanceFrom = (location) => {
 };
 
 const getPartyMembers = () => {
-  let members = {};
-  parent.party_list.forEach((item, i) => {
-    const entity = get_entity(item);
-    members[item] = entity;
+  return new Promise((resolve, reject) => {
+    let members = [];
+    parent.party_list.forEach((item, i) => {
+      const entity = get_entity(item);
+      if (entity) {
+        members.push(entity);
+      }
+    });
+    resolve(members);
   });
-  return members;
 };
 
 const getPartyMembersArray = () => {
   let members = [];
   parent.party_list.forEach((item, i) => {
     const entity = get_entity(item);
-    members.push(entity);
+    if (entity) {
+      members.push(entity);
+    }
   });
   return members;
+};
+
+const membersNotMe = (members) => {
+  return new Promise((resolve, reject) => {
+    resolve(members.filter(member => !member.me));
+  });
 };
 
 const findHealingTarget = () => {
@@ -193,7 +215,7 @@ const getMonsters = () => {
       entities.push(parent.entities[item]);
     });
     resolve(
-      entities.filter(entity => entity.type == "monster" && entity.mtype != "target")
+      entities.filter(entity => entity.type == "monster" && entity.mtype != "target" && !entity.dead && entity.visible)
     )
   });
 };
@@ -214,6 +236,24 @@ const filterByMaxAttack = (monsters, maxAttack) => {
   });
 };
 
+const filterByTargetting = (monsters, names) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(entity => !entity.dead && entity.visible && names.includes(entity.target))
+    )
+  });
+};
+
+const sortMonstersByDanger = (monsters) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.sort((a, b) => {
+        return b.attack - a.attack
+      })
+    )
+  });
+};
+
 const sortMonsters = (monsters) => {
   return new Promise((resolve, reject) => {
     resolve(
@@ -230,6 +270,16 @@ const first = (items) => {
       resolve(false);
     } else {
       resolve(items[0]);
+    }
+  });
+};
+
+const random = (items) => {
+  return new Promise((resolve, reject) => {
+    if (!items || items.length == 0) {
+      resolve(false);
+    } else {
+      resolve(items[Math.floor(Math.random() * items.length)]);
     }
   });
 };
@@ -257,7 +307,7 @@ const combat = async () => {
     //target = get_nearest_monster();
 
     if (target) {
-      log("Targetting " + target.name + " " + parseInt(distanceFrom(target)));
+      log("Targetting " + target.name + " " + parseInt(distanceFrom(target)) + "px");
       targetLastX = target.x;
       targetLastY = target.y;
     }
@@ -283,16 +333,39 @@ const combat = async () => {
     findHealingTarget();
   }
 
+  let partyMembers = await getPartyMembers()
+    .then(members => membersNotMe(members));
+
+  let dangerTargets = await getMonsters()
+    .then(monsters => filterByTargetting(monsters, partyMembers.map(member => member.id)))
+    .then(monsters => sortMonstersByDanger(monsters));
+    //.then(monsters => first(monsters));
+
+  if (dangerTargets.length > 0) {
+    let dangerTarget = await first(dangerTargets);
+    if (dangerTarget) {
+      l("Danger found: " + dangerTarget.mtype + "(" + dangerTarget.id + ") (atk: " + dangerTarget.attack + ", hp: " + dangerTarget.hp + ", target: " + dangerTarget.target + ")");
+
+      if (isWarrior()) {
+        //target = dangerTarget;
+
+        let randomTarget = await random(dangerTargets);
+        if (canUse("taunt")) {
+          l("Taunting " + dangerTarget.mtype + "(" + dangerTarget.id + ") (atk: " + dangerTarget.attack + ", hp: " + dangerTarget.hp + ", target: " + dangerTarget.target + ")");
+          use_skill("taunt", randomTarget);
+          setCooldown("taunt");
+        }
+      }
+    }
+  }
+
   if (!is_in_range(target)) {
-    console.log("Attacking creature at ", "x", target.x, "y", target.y);
+    l("Attacking creature at x="+target.x+", y="+target.y);
     move(
       target.x,
       target.y
     );
   } else if (can_attack(target)) {
-    /*if(!is_on_cooldown("taunt")){
-        //use_skill("taunt", target);
-    }*/
     state = "ATTACKING";
     attack(target);
   }
