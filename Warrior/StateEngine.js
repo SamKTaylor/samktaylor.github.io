@@ -8,10 +8,6 @@ var PreviousCharState="Idle"
 
 var AssistTarget = null
 
-var MerchantX=-288;
-var MerchantY=-34;
-var MerchantCharName = "Thelandra";
-
 var BattleX=643;
 var BattleY=1819;
 
@@ -34,19 +30,34 @@ function RegenSkills(){
 	}
 }
 
-function CheckHpMP()
-{
-	if(!character.rip)	
-	{
-		if(character.max_hp - character.hp > 150 || character.max_mp - character.mp > 150)
-		{
-			use_hp_or_mp();
-		}
-	}
-}
 
 function Get_New_Target()
 {
+    /*
+    target = null;
+	for(id in parent.entities)
+    {
+        var current=parent.entities[id];
+        if(current.type!="monster" || !current.visible || current.dead) continue;
+
+        if('target' in current){
+			//console.log(current.target);
+			console.log("Target is: " + current.target);
+            
+            var us = partyNameArray();
+            for(var i=0; i<us.length; i++){
+                if(current.target == us[i]){
+					console.log(current.target + " Needs Help!");
+                    target = current;
+
+                    setCharState("Assist");
+                }
+            }
+        }
+    }*/
+
+
+
     return get_nearest_monster();
 }
 
@@ -62,15 +73,6 @@ function DoCombat()
 	
 	if(!target)
 	{ //no current target, lets check if we should heal or go back to town
-		if (character.gold > DepositLimit)
-		{
-			CharState = "TeleportToTown";
-			return;
-		}else if((character.hp / character.max_hp) * 100 < HealthSafetyPercentage)
-		{
-			CharState = "HealthRegen";
-			return;
-		}
 		// no need to deposit or heal, so lets get a new target.
 		target = Get_New_Target();
 		if (target)
@@ -97,139 +99,109 @@ function DoCombat()
 			);
 	} else if(can_attack(target)) {
         if(!is_on_cooldown("taunt")){
-            //use_skill("taunt", target);
+            use_skill("taunt", target);
         }
         attack(target);
 	}
 }
 
-function DoHeal()
-{
-	if ((character.hp / character.max_hp) * 100 > HealthSafetyPercentage)
-	{
-		CharState = "Combat";
-	}else{
-		CheckHpMP();
-	}
-}
 
-function Trade()
-{
-	if (character.gold > 50000)
-	{
-		send_gold(MerchantCharName, character.gold - 50000)
-	}
-
-	for(slot=0; slot<42; slot++)
-	{
-		var item = character.items[slot];
-		if (!item) continue;
-		send_item(MerchantCharName,slot,item.q);
-	}
-}
-
-function Set_Previous_CharState()
-{
-	CharState = PreviousCharState;
-}
-
-
-function TeleportToTown()
-{
-	if (!character.moving)
-	{
-		use_skill("use_town", character);
-		CharState="DepositGoods";
-	}
-}
-
-function partyNameArray(){
+function OtherPartyNameArray(){
 
     var array = [];
 
     for(id in parent.party)
     {
         var current = get_entity(id);
-		if(!current.me){
-            array.push(character.name);
-        }
-    }
+		if(typeof current != "undefined"){
+			if(!current.me){
+            	array.push(current.name);
+        	}
+		}
 
+    }
+	
     return array;
 }
 
 
 function CheckAgro(){
 
+	var us = OtherPartyNameArray();
     target = null;
 	for(id in parent.entities)
     {
         var current=parent.entities[id];
         if(current.type!="monster" || !current.visible || current.dead) continue;
 
-        if(current.hasOwnProperty("target")){
-            var is_us = false;
-
-            var us = partyNameArray();
-
-            for(var i=0; i<us.length; i++){
-                if(current.target = us[i]){
-                    target = current;
-                    CharState = "Assist";
-                }
+        if('target' in current){
+            if(us.includes(current.target)){
+                console.log(current.target + " Needs Help!");
+                target = current;
+                setCharState("Assist");
             }
+
         }
     }
-    return target;
-
 }
 
 function DoAssist(){
 	
-	
-	if(!is_on_cooldown("charge")){
-		use_skill("charge");
-	}
-	move(
-		target.x,
-		target.y
-	);
+	if(target == null){
 
-    if(can_attack(target)) {
-        if(!is_on_cooldown("taunt")){
-            use_skill("taunt", target);
+		setCharState("Combat");
+        DoCombat();
+        
+	}else{
+
+		if(!is_on_cooldown("charge")){
+			use_skill("charge");
         }
-        attack(target);
-        CharState = "Combat";
-    }
-    CharState = "Combat";
+        
+		move(
+			target.x,
+			target.y
+		);
+
+		if(can_attack(target)) {
+			if(!is_on_cooldown("taunt")){
+				use_skill("taunt", target);
+			}
+            attack(target);
+            
+			setCharState("Combat");
+		}
+        
+	}
+			
+}
+
+function setCharState(state){
+    CharState = state;
+    set_message(CharState);
 }
 
 setInterval(function(){
 	
 	CheckAgro();
 	
+	console.log(CharState);
+	
     loot();
-    RegenSkills();
+   
 	set_message(CharState);
 	switch(CharState){
+
 		case "Assist":
 			DoAssist();
-		break;
+            break;
+        
 		case "Combat":
 			DoCombat();
-		break;
-		case "HealthRegen":
-			DoHeal();
-		break;
-		case "Calculating":
-			CheckHpMP();
-		break;
-		case "TeleportToTown":
-			TeleportToTown();
-			break;
+            break;
+                        
 		default:
-		CharState = "Combat";
+		      setCharState("Combat");
 	}
 	
 	RegenSkills();
