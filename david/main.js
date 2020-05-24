@@ -15,6 +15,9 @@ let MP_THRESHOLD = 0;
 let HP_REGEN_THRESHOLD = 0;
 let MP_REGEN_THRESHOLD = 0;
 
+let HEAL_THRESHOLD = 0.95;
+let PARTY_HEAL_THRESHOLD = 0.5;
+
 const CRABS = {
   "x": -1195.2656321693682,
   "y": -156.6394604905829,
@@ -31,6 +34,14 @@ const BANK_INTERNAL = {
   "map": "bank"
 };
 
+const COOLDOWNS = {
+  "invis": 12500,
+  "charge": 40500,
+  "heal": 200,
+  "partyheal": 200,
+  "revive": 200
+}
+
 let targetLastX = 0;
 let targetLastY = 0;
 
@@ -39,10 +50,10 @@ let state = "NONE";
 let cooldownMap = {};
 
 const l = (s) => {
+  console.log(s);
   if (LOGGING) {
     log(s);
   }
-  console.log(s);
 };
 
 const isDead = () => {
@@ -97,21 +108,76 @@ const goHome = () => {
 };
 
 const canUse = (skill, standardCooldownTime) => {
-	let timeNow = (new Date()).getTime();
+  if (character.ctype != "rogue" && (
+      skill == "invis"
+    ) ||
+    character.ctype != "warrior" && (
+      skill == "charge"
+    ) ||
+    character.ctype != "priest" && (
+      skill == "heal" ||
+      skill == "partyheal" ||
+      skill == "revive"
+    )) return false;
+  let timeNow = (new Date()).getTime();
 
-	if (!is_on_cooldown(skill) && can_use(skill) && timeNow > (cooldownMap[skill] || 0)) {
+  if (!is_on_cooldown(skill) && can_use(skill) && timeNow > (cooldownMap[skill] || 0)) {
     return true;
   }
 
-	cooldownMap[skill] = timeNow + standardCooldownTime;
-
-	return false;
+  return false;
 };
+
+const setCooldown = (skill, standardCooldownTime) => {
+  let timeNow = (new Date()).getTime();
+  cooldownMap[skill] = timeNow + (standardCooldownTime || COOLDOWNS[skill]);
+}
 
 const distanceFrom = (location) => {
   return Math.abs(Math.sqrt(
     Math.pow(location.x - character.real_x, 2) + Math.pow(location.y - character.real_y, 2)
   ));
+};
+
+const getPartyMembers = () => {
+  let members = {};
+  parent.party_list.forEach((item, i) => {
+    const entity = get_entity(item);
+    members[item] = entity;
+  });
+  return members;
+};
+
+const getPartyMembersArray = () => {
+  let members = [];
+  parent.party_list.forEach((item, i) => {
+    const entity = get_entity(item);
+    members.push(entity);
+  });
+  return members;
+};
+
+const findHealingTarget = () => {
+  getPartyMembersArray().forEach((item, i) => {
+    if(item.hp < (item.max_hp * HEAL_THRESHOLD)) {
+      l("Heal party member "+item.id);
+      heal(item);
+      setCooldown("heal");
+    } else if(item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
+      if (canUse("partyheal")) {
+        l("Danger! Heal party!");
+        use_skill("partyheal");
+        setCooldown("partyheal");
+      }
+    } else if(item.rip) {
+      if (canUse("revive")) {
+        l("Member dead. Revive!");
+        use("revive", item);
+        setCooldown("revive");
+      }
+    }
+
+  });
 };
 
 
@@ -141,9 +207,20 @@ const combat = () => {
     return;
   }
 
-  if (canUse("invis", 12500)) {
+  if (canUse("invis")) {
     l("Go invisible for attack.");
     use_skill("invis");
+    setCooldown("invis");
+  }
+
+  if (canUse("charge")) {
+    l("Go charge for attack.");
+    use_skill("charge");
+    setCooldown("charge");
+  }
+
+  if (canUse("partyheal")) {
+    findHealingTarget();
   }
 
   if (!is_in_range(target)) {
