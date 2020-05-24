@@ -1,4 +1,4 @@
-window.bots.cm_party = (message) => {
+window.bots.send_cm_party = (message) => {
 
     for (id in parent.party) {
         var current = get_entity(id);
