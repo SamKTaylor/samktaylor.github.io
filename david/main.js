@@ -1,7 +1,8 @@
 const LOOP_SPEED = 500;
 const LOGGING = false;
 
-const DEPOSIT_LIMIT = 20000;
+const DEPOSIT_THRESHOLD = 40000;
+const DEPOSIT_KEEP = 5000;
 
 const HP_REGEN_AMOUNT = 50;
 const MP_REGEN_AMOUNT = 100;
@@ -46,11 +47,12 @@ let targetLastX = 0;
 let targetLastY = 0;
 
 let state = "NONE";
+let ATTACK_MTYPE = "crab";
 
 let cooldownMap = {};
 
 const l = (s) => {
-  console.log(s);
+  console.log("LOG", s);
   if (LOGGING) {
     log(s);
   }
@@ -64,10 +66,10 @@ const isDead = () => {
 };
 
 const updateStatistics = () => {
-  HP_THRESHOLD = Math.max(character.max_hp - HP_POTION_AMOUNT, character.max_hp * 0.5);
-  MP_THRESHOLD = Math.max(character.max_mp - MP_POTION_AMOUNT, character.max_mp * 0.5);
-  HP_REGEN_THRESHOLD = Math.max(character.max_hp - HP_REGEN_AMOUNT, character.max_hp * 0.8);
-  MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT, character.max_mp * 0.8);
+  HP_THRESHOLD = Math.max(character.max_hp - HP_POTION_AMOUNT - 99999, character.max_hp * 0.5);
+  MP_THRESHOLD = Math.max(character.max_mp - MP_POTION_AMOUNT - 99999, character.max_mp * 0.5);
+  HP_REGEN_THRESHOLD = Math.max(character.max_hp - HP_REGEN_AMOUNT - 99999, character.max_hp * 0.8);
+  MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT - 99999, character.max_mp * 0.8);
 };
 
 const healing = () => {
@@ -93,7 +95,7 @@ const healing = () => {
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
 
-  if (character.gold > DEPOSIT_LIMIT) {
+  if (character.gold > DEPOSIT_THRESHOLD) {
     set_message("Depositing");
     if (!state.startsWith("TOWN")) {
       goHome();
@@ -134,6 +136,8 @@ const setCooldown = (skill, standardCooldownTime) => {
 }
 
 const distanceFrom = (location) => {
+  location.x = location.x || location.real_x;
+  location.y = location.y || location.real_y;
   return Math.abs(Math.sqrt(
     Math.pow(location.x - character.real_x, 2) + Math.pow(location.y - character.real_y, 2)
   ));
@@ -159,17 +163,19 @@ const getPartyMembersArray = () => {
 
 const findHealingTarget = () => {
   getPartyMembersArray().forEach((item, i) => {
-    if(item.hp < (item.max_hp * HEAL_THRESHOLD)) {
-      l("Heal party member "+item.id);
+    if (!item) return;
+
+    if (item.hp < (item.max_hp * HEAL_THRESHOLD)) {
+      l("Heal party member " + item.id);
       heal(item);
       setCooldown("heal");
-    } else if(item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
+    } else if (item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
       if (canUse("partyheal")) {
         l("Danger! Heal party!");
         use_skill("partyheal");
         setCooldown("partyheal");
       }
-    } else if(item.rip) {
+    } else if (item.rip) {
       if (canUse("revive")) {
         l("Member dead. Revive!");
         use("revive", item);
@@ -177,6 +183,54 @@ const findHealingTarget = () => {
       }
     }
 
+  });
+};
+
+const getMonsters = () => {
+  return new Promise((resolve, reject) => {
+    let entities = [];
+    Object.keys(parent.entities).forEach((item, i) => {
+      entities.push(parent.entities[item]);
+    });
+    resolve(
+      entities.filter(entity => entity.type == "monster" && entity.mtype != "target")
+    )
+  });
+};
+
+const filterByType = (monsters, mtype) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(entity => entity.mtype == (mtype || ATTACK_MTYPE))
+    )
+  });
+};
+
+const filterByMaxAttack = (monsters, maxAttack) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(entity => entity.attack < (maxAttack || 99999999))
+    )
+  });
+};
+
+const sortMonsters = (monsters) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.sort((a, b) => {
+        return (distanceFrom(a)) - (distanceFrom(b))
+      })
+    )
+  });
+};
+
+const first = (items) => {
+  return new Promise((resolve, reject) => {
+    if (!items || items.length == 0) {
+      resolve(false);
+    } else {
+      resolve(items[0]);
+    }
   });
 };
 
@@ -188,7 +242,7 @@ const findHealingTarget = () => {
 
 
 
-const combat = () => {
+const combat = async () => {
   set_message("Combat");
 
   if (!ATTACKING || character.rip || is_moving(character)) return;
@@ -196,8 +250,14 @@ const combat = () => {
   var target = get_targeted_monster();
 
   if (!target) {
-    target = get_nearest_monster();
+    target = await getMonsters()
+      .then(monsters => filterByType(monsters))
+      .then(monsters => sortMonsters(monsters))
+      .then(monsters => first(monsters));
+    //target = get_nearest_monster();
+
     if (target) {
+      log("Targetting " + target.name + " " + parseInt(distanceFrom(target)));
       targetLastX = target.x;
       targetLastY = target.y;
     }
@@ -242,7 +302,7 @@ const combat = () => {
 
 
 
-setInterval(() => {
+setInterval(async () => {
   if (is_transporting(character)) {
     l("Transporting home. Do nothing.");
     return;
@@ -265,7 +325,7 @@ setInterval(() => {
       break;
     case "TOWN_NEXT":
       l("What do we need to do in town?");
-      if (character.gold > DEPOSIT_LIMIT) {
+      if (character.gold > DEPOSIT_THRESHOLD) {
         set_message("Go Bank")
         state = "TOWN_GO_TO_BANK";
       }
@@ -281,7 +341,7 @@ setInterval(() => {
     case "TOWN_BANK_DEPOSIT":
       l("Depositing in bank");
       set_message("Deposit")
-      bank_deposit(character.gold - 2000);
+      bank_deposit(character.gold - DEPOSIT_KEEP);
       state = "TOWN_EXIT_BANK";
       break;
     case "TOWN_EXIT_BANK":
@@ -300,11 +360,11 @@ setInterval(() => {
       break;
     case "ATTACKING":
     default:
-      if (distanceFrom(CRABS) > 200) {
+      /*if (distanceFrom(CRABS) > 200) {
         smart_move(CRABS);
-      } else {
-        combat();
-      }
+      } else {*/
+      combat();
+      //}
 
       break;
   }
