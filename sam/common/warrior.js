@@ -10,15 +10,14 @@ window.warrior.check_agro = () => {
 
     var us = window.helpers.getOtherPartyNameArray();
 
-    target = null;
-    for (id in parent.entities) {
+       for (id in parent.entities) {
         var current = parent.entities[id];
         if (current.type != "monster" || !current.visible || current.dead) continue;
 
         if ('target' in current) {
             if (us.includes(current.target)) {
-                target = current;
-                change_target(target);
+                //target = current;
+                change_target(current);
                 character.state = "Assist";
                 set_message(character.state);
             }
