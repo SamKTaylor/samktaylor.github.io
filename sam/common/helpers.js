@@ -24,13 +24,11 @@ window.helpers.moveTo = (x, y) => {
 
         PreviousCharState = CharState;
         CharState = "Calculating";
-        smart_move({x: x, y: y}, Set_Previous_CharState);
+        smart_move({x: x, y: y});
     }else{
         move(x,y);
     }
 }
-
-function Set_Previous_CharState(){ CharState = PreviousCharState; }
 
 window.test = () => {
     alert('test');
@@ -49,7 +47,7 @@ window.helpers.getPartyNameArray = () => {
 }
 
 //Return array containing names of all other party members
-window.helpers.getOtherPartyNameArray() {
+window.helpers.getOtherPartyNameArray = () => {
 
     var array = [];
 
