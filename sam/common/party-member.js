@@ -4,7 +4,7 @@ const TARGET_CALLER = McGreebTanks;
 
 */
 
-const manageParty = () => {
+window.party.join = () => {
 
     party = window.helpers.getOtherPartyNameArray();
     if (!party.includes(TARGET_CALLER)){

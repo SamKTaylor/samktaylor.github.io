@@ -5,7 +5,7 @@ const CHARICTER_LIST = ["McGreebHeals","McGreebMage","MovienHeals","MovianShoots
 */
 const CHARICTER_LIST = ["McGreebHeals","McGreebMage","MovienHeals","MovianShoots","Movien"];
 
-const manageParty = () => {
+window.party.check = () => {
 
     var party = window.helpers.getOtherPartyNameArray();
 
