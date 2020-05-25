@@ -1,5 +1,5 @@
 alert("TEST");
 
-window.test = () => {
-    log("YES_MATE!");
+window.test = (string) => {
+    log(string);
 };
