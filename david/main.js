@@ -1,6 +1,7 @@
 const LOOP_SPEED = 500;
 const LOGGING = false;
 
+let AUTO_DEPOSIT = true;
 const DEPOSIT_THRESHOLD = 40000;
 const DEPOSIT_KEEP = 5000;
 
@@ -10,6 +11,7 @@ const HP_POTION_AMOUNT = 200;
 const MP_POTION_AMOUNT = 300;
 
 let ATTACKING = true;
+let PRIEST_ATTACKING = true;
 
 let HP_THRESHOLD = 0;
 let MP_THRESHOLD = 0;
@@ -34,6 +36,7 @@ const BANK_INTERNAL = {
   "y": -72.89611622120091,
   "map": "bank"
 };
+let LAST_LOCATION = CRABS;
 
 const COOLDOWNS = {
   "invis": 12500,
@@ -48,6 +51,7 @@ let targetLastY = 0;
 
 let state = "NONE";
 let ATTACK_MTYPE = "crab";
+let CALLER = false;
 
 let cooldownMap = {};
 
@@ -104,6 +108,8 @@ const healing = () => {
 
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
+
+  if (!AUTO_DEPOSIT) return;
 
   if (character.gold > DEPOSIT_THRESHOLD) {
     set_message("Depositing");
@@ -284,10 +290,47 @@ const random = (items) => {
   });
 };
 
+parent.combatStart = () => {
+  l("Starting combat");
+  localStorage.setItem("ATTACKING", 1);
+};
 
+parent.combatStop = () => {
+  l("Stopping combat");
+  localStorage.setItem("ATTACKING", 0);
+};
 
+parent.combatFocus = (type) => {
+  l("Attack focus: " + type);
+  localStorage.setItem("ATTACK_MTYPE", type);
+};
 
+parent.combatCaller = (caller) => {
+  l("Target caller: " + caller);
+  localStorage.setItem("CALLER", caller);
+};
 
+parent.combatPriest = (enabled) => {
+  l("Priest attacking: " + enabled);
+  localStorage.setItem("PRIEST_ATTACKING", enabled);
+};
+
+parent.autoDeposit = (enabled) => {
+  l("Auto deposit: " + enabled);
+  localStorage.setItem("AUTO_DEPOSIT", enabled);
+};
+
+const moveWithin = (entity, bounds) => {
+  if (distanceFrom(entity) <= (bounds + 20)) return;
+  const distance = distanceFrom(entity) - bounds;
+  const diffX = character.real_x - entity.real_x;
+  const diffY = character.real_y - entity.real_y;
+  const angle = Math.atan2(diffY, diffX);
+  const newDiffX = Math.cos(angle) * distance;
+  const newDiffY = Math.sin(angle) * distance;
+
+  move(character.real_x - newDiffX, character.real_y - newDiffY);
+};
 
 
 
@@ -295,19 +338,45 @@ const random = (items) => {
 const combat = async () => {
   set_message("Combat");
 
-  if (!ATTACKING || character.rip || is_moving(character)) return;
+  if (character.rip || is_moving(character)) return;
+
+  AUTO_DEPOSIT = localStorage.getItem("AUTO_DEPOSIT") == 1;
+  ATTACK_MTYPE = localStorage.getItem("ATTACK_MTYPE") || "crab";
+  ATTACKING = localStorage.getItem("ATTACKING") == 1;
+  PRIEST_ATTACKING = localStorage.getItem("PRIEST_ATTACKING") == 1;
+  CALLER = localStorage.getItem("CALLER") || false;
+  let callerTarget = localStorage.getItem("CALLER_TARGET") || false;
+  let caller = get_player(CALLER);
 
   var target = get_targeted_monster();
 
+  if (caller && !caller.me) {
+    if (isPriest() || !ATTACKING) {
+      moveWithin(caller, 50);
+    }
+
+    target = get_monster(caller.target);
+    if (target) {
+      l("Target from caller (" + CALLER + "): " + target.mtype + "(" + target.id + ") " + parseInt(distanceFrom(target)) + "px");
+    }
+  }
+
   if (!target) {
-    target = await getMonsters()
-      .then(monsters => filterByType(monsters))
-      .then(monsters => sortMonsters(monsters))
-      .then(monsters => first(monsters));
-    //target = get_nearest_monster();
+    if (caller && !caller.me) {
+      if (callerTarget && !callerTarget.dead) {
+        target = callerTarget;
+      }
+    } else {
+      target = await getMonsters()
+        .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
+        .then(monsters => sortMonsters(monsters))
+        .then(monsters => first(monsters));
+      //target = get_nearest_monster();
+    }
+
 
     if (target) {
-      log("Targetting " + target.name + " " + parseInt(distanceFrom(target)) + "px");
+      l("Targetting " + target.mtype + "(" + target.id + ") " + parseInt(distanceFrom(target)) + "px");
       targetLastX = target.x;
       targetLastY = target.y;
     }
@@ -316,6 +385,11 @@ const combat = async () => {
   if (!target) {
     return;
   }
+
+  change_target(target, true);
+  localStorage.setItem("TARGET", target);
+
+  if (character.rip || is_moving(character)) return;
 
   if (canUse("invis")) {
     l("Go invisible for attack.");
@@ -333,20 +407,22 @@ const combat = async () => {
     findHealingTarget();
   }
 
-  let partyMembers = await getPartyMembers()
-    .then(members => membersNotMe(members));
+  if (!ATTACKING || (isPriest() && !PRIEST_ATTACKING)) return;
 
-  let dangerTargets = await getMonsters()
-    .then(monsters => filterByTargetting(monsters, partyMembers.map(member => member.id)))
-    .then(monsters => sortMonstersByDanger(monsters));
+  if (isWarrior()) {
+    let partyMembers = await getPartyMembers()
+      .then(members => membersNotMe(members));
+
+    let dangerTargets = await getMonsters()
+      .then(monsters => filterByTargetting(monsters, partyMembers.map(member => member.id)))
+      .then(monsters => sortMonstersByDanger(monsters));
     //.then(monsters => first(monsters));
 
-  if (dangerTargets.length > 0) {
-    let dangerTarget = await first(dangerTargets);
-    if (dangerTarget) {
-      l("Danger found: " + dangerTarget.mtype + "(" + dangerTarget.id + ") (atk: " + dangerTarget.attack + ", hp: " + dangerTarget.hp + ", target: " + dangerTarget.target + ")");
+    if (dangerTargets.length > 0) {
+      let dangerTarget = await first(dangerTargets);
+      if (dangerTarget) {
+        l("Danger found: " + dangerTarget.mtype + "(" + dangerTarget.id + ") (atk: " + dangerTarget.attack + ", hp: " + dangerTarget.hp + ", target: " + dangerTarget.target + ")");
 
-      if (isWarrior()) {
         //target = dangerTarget;
 
         let randomTarget = await random(dangerTargets);
@@ -360,7 +436,7 @@ const combat = async () => {
   }
 
   if (!is_in_range(target)) {
-    l("Attacking creature at x="+target.x+", y="+target.y);
+    l("Attacking creature at x=" + target.x + ", y=" + target.y);
     move(
       target.x,
       target.y
@@ -394,6 +470,11 @@ setInterval(async () => {
   switch (state) {
     case "TOWN_GO":
       l("Go to home");
+      LAST_LOCATION = {
+        "x": character.real_x,
+        "y": character.real_y,
+        "map": character.map
+      }
       use_skill("use_town", character);
       break;
     case "TOWN_NEXT":
@@ -421,7 +502,14 @@ setInterval(async () => {
       l("Exiting the bank");
       set_message("Exit Bank")
       smart_move(BANK, () => {
-        state = "ATTACK_CRABS";
+        state = "GO_LAST_LOCATION";
+      });
+      break;
+    case "GO_LAST_LOCATION":
+      l("Moving to last location");
+      set_message("Go Last Loc")
+      smart_move(LAST_LOCATION, () => {
+        state = "ATTACKING";
       });
       break;
     case "ATTACK_CRABS":
