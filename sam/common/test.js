@@ -1,5 +1,5 @@
 alert("TEST");
 
-window.test = function (t) {
+window.test = () => {
     log("YES_MATE!");
 };
