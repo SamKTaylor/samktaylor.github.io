@@ -1,17 +1,18 @@
 /* REQUIRED CONSTANTS 
 
-const TARGET_CALLER = McGreebTanks;
+const TARGET_CALLER = "McGreebTanks";
 
 */
 
-window.party = {}
+setInterval(function () {
 
-window.party.join = () => {
+    log("Doing Party Check");
 
     party = window.helpers.getOtherPartyNameArray();
     if (!party.includes(TARGET_CALLER)){
+        log(TARGET_CALLER + " Not here");
         leave_party();
         accept_party_request(TARGET_CALLER);
     }
 	
-}
+}, 30000); // Loops every 30 seconds.
