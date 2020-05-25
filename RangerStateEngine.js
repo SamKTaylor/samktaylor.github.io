@@ -29,6 +29,9 @@ var HealthSafetyPercentage=70;
 
 var DepositLimit=200000;
 
+var SupershotCoolDown=0;
+var CanSuperShot=true;
+
 function on_cm(from, message){
 
     if(from == TargetCaller){
@@ -105,7 +108,7 @@ function Stay_Near_Tank(target)
 	if (is_moving(character)) return;
 	if(!is_in_range(target))
 	{
-		move(target.real_x -15,target.real_y);
+		move(target.real_x -22,target.real_y -15);
 	}
 }
 
@@ -137,16 +140,10 @@ function DoCombat()
 	
 	if(can_attack(target))
 	{
-		if (character.mp > 20)
+		attack(target);
+		if (character.mp > 400 && CanSuperShot)
 		{
-			attack(target);
-		}
-		if(target.hp > (character.mp * 0.555))
-		{
-			if(character.mp > 800)
-			{
-				use_skill("burst", target);
-			}
+			use_skill("supershot", target);
 		}
 	}
 }
@@ -224,6 +221,20 @@ function GoToBattle()
 		}
 	}
 }
+
+function UpdateSuperShot()
+{
+	if(CanSuperShot == false)
+	{
+		SupershotCoolDown++;
+		if(SupershotCoolDown == 121)
+		{
+			SupershotCoolDown=0;
+			CanSuperShot=true;
+		}
+	}
+}
+
 function handle_death() {
   setTimeout(respawn,15000); // respawn current has a 12 second cooldown, best wait 15 seconds before respawning [24/11/16]
   return true;
@@ -254,6 +265,8 @@ setInterval(function(){
 		default:
 		CharState = "Combat";
 	}
+	
+	UpdateSuperShot();
 
 },1000/4); // Loops every 1/4 seconds.
 
