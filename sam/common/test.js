@@ -1,11 +1,5 @@
 alert("TEST");
 
-window.helpers = function (t) {
-
-    alert("TEST-2");
-
-    function r(n) {
-        alert("TEST-3");
-    }
-
+window.helpers.test = function (t) {
+    log("YES_MATE!");
 };
