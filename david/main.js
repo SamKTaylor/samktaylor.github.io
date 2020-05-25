@@ -109,7 +109,7 @@ const healing = () => {
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
 
-  if(!AUTO_DEPOSIT) return;
+  if (!AUTO_DEPOSIT) return;
 
   if (character.gold > DEPOSIT_THRESHOLD) {
     set_message("Depositing");
@@ -320,15 +320,16 @@ parent.autoDeposit = (enabled) => {
   localStorage.setItem("AUTO_DEPOSIT", enabled);
 };
 
-const moveWithin = (entity, distance) => {
-  if(distanceFrom(entity) <= (distance + 20)) return;
-  const diffX = entity.real_x - character.real_x;
-  const diffY = entity.real_y - character.real_y;
-  const angle = Math.atan(diffY / diffX) * (180 / Math.PI);
+const moveWithin = (entity, bounds) => {
+  if (distanceFrom(entity) <= (bounds + 20)) return;
+  const distance = distanceFrom(entity) - bounds;
+  const diffX = character.real_x - entity.real_x;
+  const diffY = character.real_y - entity.real_y;
+  const angle = Math.atan2(diffY, diffX);
   const newDiffX = Math.cos(angle) * distance;
   const newDiffY = Math.sin(angle) * distance;
-  console.log("NEW", diffX, diffY, newDiffX, newDiffY);
-  //move(character.real_x + newDiffX, character.real_y + diffY);
+
+  move(character.real_x - newDiffX, character.real_y - newDiffY);
 };
 
 
@@ -349,30 +350,9 @@ const combat = async () => {
 
   var target = get_targeted_monster();
 
-
-
-
-
-  const distance = 200;
-  const diffX = 500;
-  const diffY = 200;
-  const angle = Math.tanh(diffY / diffX) * (Math.PI / 180);
-  console.log("angle", angle, Math.tanh(diffY / diffX), diffY / diffX);
-  const newDiffX = Math.cos(angle) * distance;
-  console.log("newDiffX", newDiffX);
-  const newDiffY = Math.sin(angle) * distance;
-  console.log("newDiffY", newDiffY);
-
-
-
-
-
   if (caller && !caller.me) {
-    if (isPriest()) {
-      //moveWithin(caller, 100);
-      if (!is_in_range(caller)) {
-        move(caller.real_x - 15, caller.real_y);
-      }
+    if (isPriest() || !ATTACKING) {
+      moveWithin(caller, 50);
     }
 
     target = get_monster(caller.target);
@@ -383,7 +363,7 @@ const combat = async () => {
 
   if (!target) {
     if (caller && !caller.me) {
-      if(callerTarget && !callerTarget.dead) {
+      if (callerTarget && !callerTarget.dead) {
         target = callerTarget;
       }
     } else {
@@ -409,7 +389,7 @@ const combat = async () => {
   change_target(target, true);
   localStorage.setItem("TARGET", target);
 
-  if(character.rip || is_moving(character)) return;
+  if (character.rip || is_moving(character)) return;
 
   if (canUse("invis")) {
     l("Go invisible for attack.");
