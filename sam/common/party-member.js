@@ -13,7 +13,7 @@ setInterval(function () {
     if(Object.keys(parent.party).length > 0){
         log("In A party!");
 
-        party = window.helpers.getOtherPartyNameArray();
+        var party = window.helpers.getOtherPartyNameArray();
         if (!party.includes(TARGET_CALLER)){
             log(TARGET_CALLER + " Not here, leaving");
             leave_party();
