@@ -4,11 +4,15 @@ const LOGGING = false;
 let AUTO_DEPOSIT = true;
 const DEPOSIT_THRESHOLD = 40000;
 const DEPOSIT_KEEP = 5000;
+const DEPOSIT_CHARACTER = "KnossosSells";
 
 const HP_REGEN_AMOUNT = 50;
 const MP_REGEN_AMOUNT = 100;
 const HP_POTION_AMOUNT = 200;
 const MP_POTION_AMOUNT = 300;
+
+const FOLLOW_DISTANCE = 100;
+const CLOSE_FOLLOW_DISTANCE = 10;
 
 let ATTACKING = true;
 let PRIEST_ATTACKING = true;
@@ -39,11 +43,14 @@ const BANK_INTERNAL = {
 let LAST_LOCATION = CRABS;
 
 const COOLDOWNS = {
-  "invis": 12500,
-  "charge": 40500,
+  "invis": 12100,
+  "charge": 40100,
   "heal": 200,
   "partyheal": 200,
-  "revive": 200
+  "revive": 200,
+  "quickpunch": 2600,
+  "curse": 5100,
+  "darkblessing": 60100
 }
 
 let targetLastX = 0;
@@ -76,6 +83,9 @@ const updateStatistics = () => {
   MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT - 99999, character.max_mp * 0.8);
 };
 
+const isMerchant = () => {
+  return character.ctype == "merchant";
+}
 const isRogue = () => {
   return character.ctype == "rogue";
 }
@@ -86,28 +96,51 @@ const isPriest = () => {
   return character.ctype == "priest";
 }
 
+const isMpHigher = (factor) => {
+  return (character.mp / character.max_mp > factor);
+}
+
 const healing = () => {
   if (isDead()) return;
+
+  // console.log(is_on_cooldown("use_hp"), is_on_cooldown("use_mp"));
+  // console.log(character.hp, HP_THRESHOLD);
+  // console.log(character.mp, MP_THRESHOLD);
 
   if (!is_on_cooldown("use_hp") && character.hp < HP_THRESHOLD) {
     l("Drink healing potion");
     use_skill("use_hp");
   } else if (!is_on_cooldown("use_mp") && character.mp < MP_THRESHOLD) {
-    l("Drink mana potion");
-    use_skill("use_mp");
+    if (isPriest()) {
+      l("Drink mana potion");
+      use_skill("use_mp");
+    }
   }
 
   if (!is_on_cooldown("regen_hp") && character.hp < HP_REGEN_THRESHOLD) {
-    l("Regenerate health");
+    //l("Regenerate health");
     use_skill("regen_hp");
   } else if (!is_on_cooldown("regen_mp") && character.mp < MP_REGEN_THRESHOLD) {
-    l("Regenerate mana");
+    //l("Regenerate mana");
     use_skill("regen_mp");
   }
 };
 
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
+
+  const merchant = get_player(DEPOSIT_CHARACTER);
+  if (!isMerchant() && merchant && distanceFrom(merchant) < 500) {
+    if (character.gold > DEPOSIT_KEEP * 2) {
+      send_gold(DEPOSIT_CHARACTER, character.gold - DEPOSIT_KEEP);
+    }
+
+    character.items.forEach((item, i) => {
+      if (!item || item.name.startsWith("hpot") || item.name.startsWith("mpot")) return;
+      console.log(i, item);
+      send_item(DEPOSIT_CHARACTER, i, item.q || 1);
+    });
+  }
 
   if (!AUTO_DEPOSIT) return;
 
@@ -197,13 +230,17 @@ const findHealingTarget = () => {
       l("Heal party member " + item.id);
       heal(item);
       setCooldown("heal");
-    } else if (item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
+    }
+
+    if (item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
       if (canUse("partyheal")) {
         l("Danger! Heal party!");
         use_skill("partyheal");
         setCooldown("partyheal");
       }
-    } else if (item.rip) {
+    }
+
+    if (item.rip) {
       if (canUse("revive")) {
         l("Member dead. Revive!");
         use("revive", item);
@@ -340,23 +377,18 @@ const combat = async () => {
 
   if (character.rip || is_moving(character)) return;
 
-  AUTO_DEPOSIT = localStorage.getItem("AUTO_DEPOSIT") == 1;
-  ATTACK_MTYPE = localStorage.getItem("ATTACK_MTYPE") || "crab";
-  ATTACKING = localStorage.getItem("ATTACKING") == 1;
-  PRIEST_ATTACKING = localStorage.getItem("PRIEST_ATTACKING") == 1;
-  CALLER = localStorage.getItem("CALLER") || false;
   let callerTarget = localStorage.getItem("CALLER_TARGET") || false;
   let caller = get_player(CALLER);
 
-  var target = get_targeted_monster();
+  let target = get_targeted_monster();
 
   if (caller && !caller.me) {
     if (isPriest() || !ATTACKING) {
-      moveWithin(caller, 50);
+      moveWithin(caller, ATTACKING ? FOLLOW_DISTANCE : CLOSE_FOLLOW_DISTANCE);
     }
 
     target = get_monster(caller.target);
-    if (target) {
+    if (target && target != get_targeted_monster()) {
       l("Target from caller (" + CALLER + "): " + target.mtype + "(" + target.id + ") " + parseInt(distanceFrom(target)) + "px");
     }
   }
@@ -369,6 +401,7 @@ const combat = async () => {
     } else {
       target = await getMonsters()
         .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
+        .then(monsters => filterByMaxAttack(monsters, 200))
         .then(monsters => sortMonsters(monsters))
         .then(monsters => first(monsters));
       //target = get_nearest_monster();
@@ -391,6 +424,12 @@ const combat = async () => {
 
   if (character.rip || is_moving(character)) return;
 
+  if (isPriest()) {
+    findHealingTarget();
+  }
+
+  if (!ATTACKING || (isPriest() && !PRIEST_ATTACKING)) return;
+
   if (canUse("invis")) {
     l("Go invisible for attack.");
     use_skill("invis");
@@ -402,12 +441,6 @@ const combat = async () => {
     use_skill("charge");
     setCooldown("charge");
   }
-
-  if (canUse("partyheal")) {
-    findHealingTarget();
-  }
-
-  if (!ATTACKING || (isPriest() && !PRIEST_ATTACKING)) return;
 
   if (isWarrior()) {
     let partyMembers = await getPartyMembers()
@@ -442,6 +475,18 @@ const combat = async () => {
       target.y
     );
   } else if (can_attack(target)) {
+    if (canUse("quickpunch")) {
+      l("Attack with quickpunch.");
+      use_skill("quickpunch");
+      setCooldown("quickpunch");
+    }
+
+    if (canUse("curse") && isMpHigher(0.7)) {
+      l("Attack with curse.");
+      use_skill("curse");
+      setCooldown("curse");
+    }
+
     state = "ATTACKING";
     attack(target);
   }
@@ -452,6 +497,21 @@ const combat = async () => {
 
 
 setInterval(async () => {
+  AUTO_DEPOSIT = localStorage.getItem("AUTO_DEPOSIT") == 1;
+  ATTACK_MTYPE = localStorage.getItem("ATTACK_MTYPE") || "crab";
+  ATTACKING = localStorage.getItem("ATTACKING") == 1;
+  PRIEST_ATTACKING = localStorage.getItem("PRIEST_ATTACKING") == 1;
+  CALLER = localStorage.getItem("CALLER") || false;
+
+  if (isDead()) {
+    setTimeout(() => {
+      if (isDead()) {
+        state = "GO_LAST_LOCATION";
+        respawn();
+      }
+    }, 5000);
+  }
+
   if (is_transporting(character)) {
     l("Transporting home. Do nothing.");
     return;
@@ -528,6 +588,18 @@ setInterval(async () => {
       //}
 
       break;
+  }
+
+  let items = {};
+  character.items.forEach((item, i) => {
+    if (!item) return;
+    items[item.name] = item.q || 1;
+  });
+  if(items["hpot0"] < 200) {
+    buy("hpot0", 200 - items["hpot0"]);
+  }
+  if(items["mpot0"] < 200) {
+    buy("mpot0", 200 - items["mpot0"]);
   }
 
 }, LOOP_SPEED);
