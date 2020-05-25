@@ -20,11 +20,23 @@ window.helpers.moveTo = (x, y) => {
 
         window.helpers.send_cm_party({action:"smart_move", x: x, y: y});
         smart_move({x: x, y: y});
-        
+
     }else{
         move(x,y);
     }
 }
+
+window.helpers.moveWithin = (entity, bounds) => {
+    if (window.helpers.distanceFrom(entity) <= (bounds + 20)) return;
+    const distance = window.helpers.distanceFrom(entity) - bounds;
+    const diffX = character.real_x - entity.real_x;
+    const diffY = character.real_y - entity.real_y;
+    const angle = Math.atan2(diffY, diffX);
+    const newDiffX = Math.cos(angle) * distance;
+    const newDiffY = Math.sin(angle) * distance;
+  
+    move(character.real_x - newDiffX, character.real_y - newDiffY);
+  };
 
 //Return array containing names of all party members
 window.helpers.getPartyNameArray = () => {
@@ -52,12 +64,13 @@ window.helpers.getOtherPartyNameArray = () => {
     return array;
 }
 
+//send a message to everyone in the party
 window.helpers.send_cm_party = (message) => {
 
-    for (id in parent.party) {
-        var current = get_entity(id);
-        if (typeof current != "undefined") {
-            send_cm(current.name, message);
+    for (name in parent.party) {
+        if (name != character.name) {
+            log("Messaging " + name);
+            send_cm(name, message);
         }
     }
     

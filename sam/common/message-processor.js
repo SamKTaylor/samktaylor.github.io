@@ -1,5 +1,6 @@
 function on_cm(from, message){
 
+    log("Message Recived.");
     if(from == TargetCaller){
 		TargetCallerCommand(message);
     }
