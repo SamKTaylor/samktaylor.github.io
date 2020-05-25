@@ -4,6 +4,8 @@ const TARGET_CALLER = "McGreebTanks";
 
 */
 
+log("Loading Party Member Script");
+
 setInterval(function () {
 
     log("Doing Party Check");
