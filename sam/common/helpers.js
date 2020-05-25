@@ -19,10 +19,8 @@ window.helpers.moveTo = (x, y) => {
     if(window.helpers.distanceFrom(x,y) > SMART_MOVE_DISTANCE){
 
         window.helpers.send_cm_party({action:"smart_move", x: x, y: y});
-
-        PreviousCharState = CharState;
-        CharState = "Calculating";
         smart_move({x: x, y: y});
+        
     }else{
         move(x,y);
     }
