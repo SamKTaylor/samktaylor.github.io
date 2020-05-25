@@ -21,7 +21,7 @@ setInterval(function () {
     }else{
         log("Not in a party, trying to accept request");
     
-        accept_party_request(TARGET_CALLER);
+        accept_party_invite(TARGET_CALLER);
     }
 	
 }, 30000); // Loops every 30 seconds.
