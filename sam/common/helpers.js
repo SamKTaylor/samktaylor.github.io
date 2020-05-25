@@ -53,7 +53,7 @@ window.helpers.getPartyNameArray = () => {
 }
 
 //Return array containing names of all other party members
-function getOtherPartyNameArray() {
+export function getOtherPartyNameArray() {
 
     var array = [];
 
