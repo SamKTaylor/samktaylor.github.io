@@ -1,8 +1,15 @@
+/* REQUIRED CONSTANTS 
+
+const TARGET_CALLER = "McGreebTanks";
+
+*/
+
+
 function on_cm(from, message){
 
     log("Message Recived.");
-    if(from == TargetCaller){
-		TargetCallerCommand(message);
+    if(from == TARGET_CALLER){
+		processMessage(message);
     }
     
 }
