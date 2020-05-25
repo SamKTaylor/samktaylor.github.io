@@ -10,7 +10,7 @@ setInterval(function () {
 
     log("Doing Party Check");
 
-    if(count(parent.party) > 0){
+    if(Object.keys(parent.party).length > 0){
         log("In A party!");
 
         party = window.helpers.getOtherPartyNameArray();
