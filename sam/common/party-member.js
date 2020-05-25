@@ -4,6 +4,8 @@ const TARGET_CALLER = McGreebTanks;
 
 */
 
+window.party = {}
+
 window.party.join = () => {
 
     party = window.helpers.getOtherPartyNameArray();
