@@ -3,6 +3,7 @@
 const CHARICTER_LIST = ["McGreebHeals","McGreebMage","MovienHeals","MovianShoots","Movien"];
 
 */
+const PARTY_INTERVAL = 30 * 100;
 const CHARICTER_LIST = ["McGreebHeals","McGreebMage","MovienHeals","MovianShoots","Movien"];
 
 setInterval(function () {
@@ -20,4 +21,4 @@ setInterval(function () {
         }
     });
     
-}, 30000); // Loops every 30 seconds.
+}, PARTY_INTERVAL);

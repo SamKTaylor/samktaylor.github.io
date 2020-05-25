@@ -4,6 +4,7 @@ const TARGET_CALLER = "McGreebTanks";
 
 */
 
+const PARTY_INTERVAL = 30 * 100;
 log("Loading Party Member Script");
 
 setInterval(function () {
@@ -24,4 +25,4 @@ setInterval(function () {
         accept_party_invite(TARGET_CALLER);
     }
 	
-}, 30000); // Loops every 30 seconds.
+}, PARTY_INTERVAL);
