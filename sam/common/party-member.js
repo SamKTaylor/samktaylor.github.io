@@ -10,10 +10,17 @@ setInterval(function () {
 
     log("Doing Party Check");
 
-    party = window.helpers.getOtherPartyNameArray();
-    if (!party.includes(TARGET_CALLER)){
-        log(TARGET_CALLER + " Not here");
-        leave_party();
+    if(count(parent.party) > 0){
+        log("In A party!");
+
+        party = window.helpers.getOtherPartyNameArray();
+        if (!party.includes(TARGET_CALLER)){
+            log(TARGET_CALLER + " Not here, leaving");
+            leave_party();
+        }
+    }else{
+        log("Not in a party, trying to accept request");
+    
         accept_party_request(TARGET_CALLER);
     }
 	
