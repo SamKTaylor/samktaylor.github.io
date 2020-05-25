@@ -8,6 +8,7 @@ const SMART_MOVE_DISTANCE = 200;
 
 */
 
+window.helpers = {};
 
 const distanceFrom = (x, y) => {
     return Math.abs(Math.sqrt(
@@ -34,7 +35,7 @@ const moveTo = (x, y) => {
 function Set_Previous_CharState(){ CharState = PreviousCharState; }
 
 //Return array containing names of all party members
-function getPartyNameArray() {
+window.helpers.getPartyNameArray = () => {
 
     var array = [];
 
