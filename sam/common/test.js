@@ -1,10 +1,9 @@
-window.send_cm_party = (message) => {
+alert("TEST");
 
-    for (id in parent.party) {
-        var current = get_entity(id);
-        if (typeof current != "undefined") {
-            send_cm(current.name, message);
-        }
+window.helpers = function (t) {
+
+    function r(n) {
+        alert("TEST-2");
     }
-    
-}
+
+};
