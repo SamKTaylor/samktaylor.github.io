@@ -8,6 +8,8 @@ const SMART_MOVE_DISTANCE = 200;
 
 */
 
+log('HELPERS LOADED');
+
 window.helpers = {};
 
 const distanceFrom = (x, y) => {
