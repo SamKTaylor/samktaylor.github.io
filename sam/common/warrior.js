@@ -6,7 +6,7 @@ window.warrior.announce_my_location = () => {
 };
 
 //check the target of all nearby monsters, if they are targeting a party memeber set state to assist and target to that monster
-window.warrior.check_agro() = () => {
+window.warrior.check_agro = () => {
 
     var us = window.helpers.getOtherPartyNameArray();
 
