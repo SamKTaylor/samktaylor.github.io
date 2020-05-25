@@ -1,15 +1,27 @@
-const SMART_MOVE_DISTANCE = 200;
 
-const VERSION = 100; 
-import("https://samktaylor.github.io/sam/common/helpers.js?v=" + VERSION)
-  .then((module) => {
-	 import("https://samktaylor.github.io/sam/common/party-member.js?v=" + VERSION);
-	 import("https://samktaylor.github.io/sam/common/respawn.js?v=" + VERSION);
-  });
+var attack_mode = true
 
-var CharState = "Combat";
+var TargetLastX = 0
+var TargetLastY = 0
+
+var CharState = "Combat"
+var PreviousCharState = "Idle"
+
+var AssistTarget = null
+
+var BattleX = 643;
+var BattleY = 1819;
+
+var HealthSafetyPercentage = 60;
+
+var DepositLimit = 200000;
+
+var log = true;
+
 var max_attack = 400;
-var attack_mode = true;
+
+
+const SMART_MOVE_DISTANCE = 200;
 
 function RegenSkills() {
     if (!character.rip) {
@@ -44,7 +56,7 @@ function Get_New_Target() {
         }
 
         if ('target' in current) {
-            var us = window.helpers.getPartyNameArray();
+            var us = AllPartyNameArray();
             if (us.includes(current.target)) {
                 return current;
             }
@@ -85,7 +97,7 @@ function DoCombat() {
         if (!is_on_cooldown("charge")) {
             use_skill("charge");
         }
-        window.helpers.moveTo(
+        moveTo(
             target.x,
             target.y
         );
@@ -102,7 +114,7 @@ function DoCombat() {
 //check the target of all nearby monsters, if they are targeting a party memeber set state to assist and target to that monster
 function CheckAgro() {
 
-    var us = window.helpers.getOtherPartyNameArray();
+    var us = OtherPartyNameArray();
     target = null;
     for (id in parent.entities) {
         var current = parent.entities[id];
@@ -134,7 +146,7 @@ function DoAssist() {
         use_skill("charge");
     }
 
-    window.helpers.moveTo(
+    moveTo(
         target.x,
         target.y
     );
@@ -157,7 +169,12 @@ function setCharState(state) {
 
 setInterval(function () {
 
+    
+
     CheckAgro();
+
+    
+
     loot();
 
     switch (CharState) {
@@ -175,5 +192,6 @@ setInterval(function () {
     }
 
     RegenSkills();
+    manageParty();
 
 }, 1000 / 4); // Loops every 1/4 seconds.
