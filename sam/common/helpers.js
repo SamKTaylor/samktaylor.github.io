@@ -36,6 +36,10 @@ const moveTo = (x, y) => {
 
 function Set_Previous_CharState(){ CharState = PreviousCharState; }
 
+window.test = () => {
+    alert('test');
+}
+
 //Return array containing names of all party members
 window.helpers.getPartyNameArray = () => {
 
