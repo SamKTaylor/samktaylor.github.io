@@ -5,6 +5,32 @@
 
 //var attack_mode = false
 
+
+
+function on_party_request(name) {
+  console.log("on_party_request", name);
+  if (
+    name.startsWith("Knossos") ||
+    name.startsWith("McGreeb") ||
+    name.startsWith("Movian") ||
+    name.startsWith("Movien")
+  ) {
+    accept_party_request(name);
+  }
+}
+
+function on_party_invite(name) {
+  console.log("on_party_invite", name);
+  if (
+    name.startsWith("Knossos") ||
+    name.startsWith("McGreeb") ||
+    name.startsWith("Movian") ||
+    name.startsWith("Movien")
+  ) {
+    accept_party_invite(name);
+  }
+}
+
 setInterval(function() {
   let items = {};
   character.items.forEach((item, i) => {

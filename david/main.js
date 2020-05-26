@@ -1,10 +1,11 @@
-const LOOP_SPEED = 500;
+const LOOP_SPEED = 300;
 const LOGGING = false;
 
 let AUTO_DEPOSIT = true;
 const DEPOSIT_THRESHOLD = 40000;
 const DEPOSIT_KEEP = 5000;
 const DEPOSIT_CHARACTER = "KnossosSells";
+let merchant = {};
 
 const HP_REGEN_AMOUNT = 50;
 const MP_REGEN_AMOUNT = 100;
@@ -46,11 +47,13 @@ const COOLDOWNS = {
   "invis": 12100,
   "charge": 40100,
   "heal": 200,
-  "partyheal": 200,
+  "partyheal": 10000,
   "revive": 200,
   "quickpunch": 2600,
   "curse": 5100,
-  "darkblessing": 60100
+  "darkblessing": 60100,
+  "regen_hp": 3000,
+  "regen_mp": 3000
 }
 
 let targetLastX = 0;
@@ -69,6 +72,28 @@ const l = (s) => {
   }
 };
 
+function on_party_request(name) {
+  if (
+    name.startsWith("Knossos") ||
+    name.startsWith("McGreeb") ||
+    name.startsWith("Movian") ||
+    name.startsWith("Movien")
+  ) {
+    accept_party_invite(name);
+  }
+}
+
+function on_party_invite(name) {
+  if (
+    name.startsWith("Knossos") ||
+    name.startsWith("McGreeb") ||
+    name.startsWith("Movian") ||
+    name.startsWith("Movien")
+  ) {
+    accept_party_request(name);
+  }
+}
+
 const isDead = () => {
   if (character.rip) {
     state = "DEAD";
@@ -77,10 +102,10 @@ const isDead = () => {
 };
 
 const updateStatistics = () => {
-  HP_THRESHOLD = Math.max(character.max_hp - HP_POTION_AMOUNT - 99999, character.max_hp * 0.5);
-  MP_THRESHOLD = Math.max(character.max_mp - MP_POTION_AMOUNT - 99999, character.max_mp * 0.5);
-  HP_REGEN_THRESHOLD = Math.max(character.max_hp - HP_REGEN_AMOUNT - 99999, character.max_hp * 0.8);
-  MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT - 99999, character.max_mp * 0.8);
+  HP_THRESHOLD = Math.max(character.max_hp - HP_POTION_AMOUNT * 2, character.max_hp * 0.5);
+  MP_THRESHOLD = Math.max(character.max_mp - MP_POTION_AMOUNT * 2, character.max_mp * 0.5);
+  HP_REGEN_THRESHOLD = Math.max(character.max_hp - HP_REGEN_AMOUNT, character.max_hp * 0.8);
+  MP_REGEN_THRESHOLD = Math.max(character.max_mp - MP_REGEN_AMOUNT, character.max_mp * 0.8);
 };
 
 const isMerchant = () => {
@@ -110,26 +135,26 @@ const healing = () => {
   if (!is_on_cooldown("use_hp") && character.hp < HP_THRESHOLD) {
     l("Drink healing potion");
     use_skill("use_hp");
-  } else if (!is_on_cooldown("use_mp") && character.mp < MP_THRESHOLD) {
-    if (isPriest()) {
-      l("Drink mana potion");
-      use_skill("use_mp");
-    }
-  }
-
-  if (!is_on_cooldown("regen_hp") && character.hp < HP_REGEN_THRESHOLD) {
-    //l("Regenerate health");
+    setCooldown("use_hp");
+  } else if (isPriest() && !is_on_cooldown("use_mp") && character.mp < MP_THRESHOLD) {
+    l("Drink mana potion");
+    use_skill("use_mp");
+    setCooldown("use_mp");
+  } else if (canUse("regen_hp") && character.hp < HP_REGEN_THRESHOLD) {
+    l("Regenerate health");
     use_skill("regen_hp");
-  } else if (!is_on_cooldown("regen_mp") && character.mp < MP_REGEN_THRESHOLD) {
-    //l("Regenerate mana");
+    setCooldown("regen_hp");
+  } else if (canUse("regen_mp") && character.mp < MP_REGEN_THRESHOLD) {
+    l("Regenerate mana");
     use_skill("regen_mp");
+    setCooldown("regen_mp");
   }
 };
 
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
 
-  const merchant = get_player(DEPOSIT_CHARACTER);
+  merchant = get_player(DEPOSIT_CHARACTER);
   if (!isMerchant() && merchant && distanceFrom(merchant) < 500) {
     if (character.gold > DEPOSIT_KEEP * 2) {
       send_gold(DEPOSIT_CHARACTER, character.gold - DEPOSIT_KEEP);
@@ -160,13 +185,16 @@ const goHome = () => {
 
 const canUse = (skill, standardCooldownTime) => {
   if (!isRogue() && (
-      skill == "invis"
+      skill == "invis" ||
+      skill == "quickpunch"
     ) ||
     !isWarrior() && (
-      skill == "charge"
+      skill == "charge" ||
+      skill == "taunt"
     ) ||
     !isPriest() && (
       skill == "heal" ||
+      skill == "curse" ||
       skill == "partyheal" ||
       skill == "revive"
     )) return false;
@@ -192,9 +220,14 @@ const distanceFrom = (location) => {
   ));
 };
 
+let CACHED_MEMBERS = [];
 const getPartyMembers = () => {
   return new Promise((resolve, reject) => {
-    let members = [];
+    let members = CACHED_MEMBERS;
+    if (members.length != 0) {
+      resolve(members);
+      return;
+    }
     parent.party_list.forEach((item, i) => {
       const entity = get_entity(item);
       if (entity) {
@@ -206,7 +239,11 @@ const getPartyMembers = () => {
 };
 
 const getPartyMembersArray = () => {
-  let members = [];
+  let members = CACHED_MEMBERS;
+  if (members.length != 0) {
+    resolve(members);
+    return;
+  }
   parent.party_list.forEach((item, i) => {
     const entity = get_entity(item);
     if (entity) {
@@ -222,22 +259,41 @@ const membersNotMe = (members) => {
   });
 };
 
-const findHealingTarget = () => {
-  getPartyMembersArray().forEach((item, i) => {
+const isAMemberBelow = (members, factor) => {
+  return new Promise((resolve, reject) => {
+    let isDanger = false;
+    members.forEach((item, i) => {
+      if(item && (item.hp / item.max_hp) < factor) {
+        isDanger = true;
+      }
+    });
+
+    resolve(isDanger);
+  });
+};
+
+const findHealingTarget = async () => {
+  // console.log("----------------------------------------");
+  let partyMembers = await getPartyMembers()
+    .then(members => sortByLowestHealth(members));
+
+  partyMembers.forEach((item, i) => {
     if (!item) return;
 
-    if (item.hp < (item.max_hp * HEAL_THRESHOLD)) {
-      l("Heal party member " + item.id);
-      heal(item);
-      setCooldown("heal");
-    }
+    // console.log(i + ". " + item.id + " " + (item.hp / item.max_hp));
 
-    if (item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
+    if (!item.rip && item.hp < (item.max_hp * PARTY_HEAL_THRESHOLD)) {
       if (canUse("partyheal")) {
         l("Danger! Heal party!");
         use_skill("partyheal");
         setCooldown("partyheal");
       }
+    }
+
+    if (can_heal(item) && !item.rip && item.hp < (item.max_hp * HEAL_THRESHOLD)) {
+      l("Heal party member " + item.id);
+      heal(item);
+      setCooldown("heal");
     }
 
     if (item.rip) {
@@ -251,9 +307,14 @@ const findHealingTarget = () => {
   });
 };
 
+let CACHED_MONSTERS = [];
 const getMonsters = () => {
   return new Promise((resolve, reject) => {
-    let entities = [];
+    let entities = CACHED_MONSTERS;
+    if (entities.length != 0) {
+      resolve(entities);
+      return;
+    }
     Object.keys(parent.entities).forEach((item, i) => {
       entities.push(parent.entities[item]);
     });
@@ -294,6 +355,14 @@ const sortMonstersByDanger = (monsters) => {
         return b.attack - a.attack
       })
     )
+  });
+};
+
+const sortByLowestHealth = (entities) => {
+  return new Promise((resolve, reject) => {
+    resolve(entities.sort((a, b) => {
+      return ((a.hp / a.max_hp) * 100) - ((b.hp / b.max_hp) * 100)
+    }))
   });
 };
 
@@ -415,6 +484,16 @@ const combat = async () => {
     }
   }
 
+  if (character.rip || is_moving(character)) return;
+
+  if (isPriest()) {
+    findHealingTarget();
+
+    let inDanger = await getPartyMembers()
+      .then(members => isAMemberBelow(members, 0.7));
+    if(inDanger) return;
+  }
+
   if (!target) {
     return;
   }
@@ -422,24 +501,12 @@ const combat = async () => {
   change_target(target, true);
   localStorage.setItem("TARGET", target);
 
-  if (character.rip || is_moving(character)) return;
-
-  if (isPriest()) {
-    findHealingTarget();
-  }
-
   if (!ATTACKING || (isPriest() && !PRIEST_ATTACKING)) return;
 
   if (canUse("invis")) {
     l("Go invisible for attack.");
     use_skill("invis");
     setCooldown("invis");
-  }
-
-  if (canUse("charge")) {
-    l("Go charge for attack.");
-    use_skill("charge");
-    setCooldown("charge");
   }
 
   if (isWarrior()) {
@@ -470,6 +537,13 @@ const combat = async () => {
 
   if (!is_in_range(target)) {
     l("Attacking creature at x=" + target.x + ", y=" + target.y);
+
+    if (canUse("charge")) {
+      l("Go charge for attack.");
+      use_skill("charge");
+      setCooldown("charge");
+    }
+
     move(
       target.x,
       target.y
@@ -497,6 +571,9 @@ const combat = async () => {
 
 
 setInterval(async () => {
+  CACHED_MEMBERS = [];
+  CACHED_MONSTERS = [];
+
   AUTO_DEPOSIT = localStorage.getItem("AUTO_DEPOSIT") == 1;
   ATTACK_MTYPE = localStorage.getItem("ATTACK_MTYPE") || "crab";
   ATTACKING = localStorage.getItem("ATTACKING") == 1;
@@ -530,11 +607,6 @@ setInterval(async () => {
   switch (state) {
     case "TOWN_GO":
       l("Go to home");
-      LAST_LOCATION = {
-        "x": character.real_x,
-        "y": character.real_y,
-        "map": character.map
-      }
       use_skill("use_town", character);
       break;
     case "TOWN_NEXT":
@@ -581,6 +653,12 @@ setInterval(async () => {
       break;
     case "ATTACKING":
     default:
+      LAST_LOCATION = {
+        "x": character.real_x,
+        "y": character.real_y,
+        "map": character.map
+      }
+
       /*if (distanceFrom(CRABS) > 200) {
         smart_move(CRABS);
       } else {*/
@@ -590,16 +668,18 @@ setInterval(async () => {
       break;
   }
 
-  let items = {};
-  character.items.forEach((item, i) => {
-    if (!item) return;
-    items[item.name] = item.q || 1;
-  });
-  if(items["hpot0"] < 200) {
-    buy("hpot0", 200 - items["hpot0"]);
-  }
-  if(items["mpot0"] < 200) {
-    buy("mpot0", 200 - items["mpot0"]);
+  if (merchant && distanceFrom(merchant) < 500) {
+    let items = {};
+    character.items.forEach((item, i) => {
+      if (!item) return;
+      items[item.name] = item.q || 1;
+    });
+    if (items["hpot0"] < 600) {
+      buy("hpot0", 600 - items["hpot0"]);
+    }
+    if (items["mpot0"] < 600) {
+      buy("mpot0", 600 - items["mpot0"]);
+    }
   }
 
 }, LOOP_SPEED);
