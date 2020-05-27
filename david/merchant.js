@@ -1,48 +1,116 @@
-// Hey there!
-// This is CODE, lets you control your character with code.
-// If you don't know how to code, don't worry, It's easy.
-// Just set attack_mode to true and ENGAGE!
+const LOGGING = true;
 
-//var attack_mode = false
-
-
+const l = (s) => {
+  console.log("LOG", s);
+  if (LOGGING) {
+    log(s);
+  }
+};
 
 function on_party_request(name) {
-  console.log("on_party_request", name);
+  l("Party request from " + name);
   if (
     name.startsWith("Knossos") ||
     name.startsWith("McGreeb") ||
     name.startsWith("Movian") ||
     name.startsWith("Movien")
   ) {
-    accept_party_request(name);
+    l("Accept request from " + name);
+    accept_party_invite(name);
+    setTimeout(() => accept_party_invite(name), 1000);
+    setTimeout(() => accept_party_invite(name), 2000);
   }
 }
 
 function on_party_invite(name) {
-  console.log("on_party_invite", name);
+  l("Party invite from " + name);
   if (
     name.startsWith("Knossos") ||
     name.startsWith("McGreeb") ||
     name.startsWith("Movian") ||
     name.startsWith("Movien")
   ) {
-    accept_party_invite(name);
+    l("Accept invite from " + name);
+    accept_party_request(name);
+    setTimeout(() => accept_party_request(name), 1000);
+    setTimeout(() => accept_party_request(name), 2000);
   }
 }
 
 setInterval(function() {
-  let items = {};
+  let upgradeScrollSlot = -1;
+  let compoundableScrollSlot = -1;
+  let consumable = {};
+  let upgradable = {};
   character.items.forEach((item, i) => {
     if (!item) return;
-    items[item.name] = item.q || 1;
+
+    if (item.q) {
+      // Quantity exists, must be consumable.
+      consumable[item.name] = item.q;
+
+      if (item.name == "scroll0") upgradeScrollSlot = i;
+      if (item.name == "cscroll0") compoundableScrollSlot = i;
+    } else {
+      // console.log(item);
+      // Level exists, must be upgradable.
+      if (!upgradable[item.name]) {
+        upgradable[item.name] = [];
+      }
+      if (!upgradable[item.name][item.level]) {
+        upgradable[item.name][item.level] = [];
+      }
+      upgradable[item.name][item.level].push(i);
+    }
   });
-  if(items["scroll0"] < 50) {
-    buy("scroll0", 50 - items["scroll0"]);
+  if (consumable["scroll0"] < 50) {
+    buy("scroll0", 50 - consumable["scroll0"]);
   }
-  if(items["cscroll0"] < 50) {
-    buy("cscroll0", 50 - items["cscroll0"]);
+  if (consumable["cscroll0"] < 50) {
+    buy("cscroll0", 50 - consumable["cscroll0"]);
   }
+
+  // console.log("upgradable", JSON.stringify(upgradable));
+
+  let keys = Object.keys(upgradable);
+  keys.forEach((key, i1) => {
+    let item = upgradable[key];
+    for (let itemIndex = 0; itemIndex < item.length; itemIndex++) {
+      if(itemIndex > 4) {
+        // DONT AUTO UPGRADE HIGHER LEVEL STUFF
+        return;
+      }
+
+      let level = item[itemIndex];
+
+      if (level && level.length >= 3) {
+        // console.log("Compound", "->", key);
+
+        let item0 = level.splice(0, 1);
+        let item1 = level.splice(0, 1);
+        let item2 = level.splice(0, 1);
+
+        compound(item0, item1, item2, compoundableScrollSlot);
+      } else if (level && level.length == 1) {
+        // console.log("Upgrade", "->", key);
+
+        let item0 = level.splice(0, 1);
+
+        upgrade(item0, upgradeScrollSlot);
+      }
+    }
+
+    // console.log("item", key, item);
+    // item.forEach((levelKey, i2) => {
+    //   let level = item[i2];
+    //   console.log("level", levelKey, level);
+    //   level.forEach((slotKey, i3) => {
+    //     let slot = level[i3];
+    //     console.log("slot", slotKey, slot);
+    //   });
+    // });
+  });
+
 
   /*use_hp_or_mp();
   loot();
@@ -73,7 +141,12 @@ setInterval(function() {
     attack(target);
   }*/
 
-}, 1000 / 4); // Loops every 1/4 seconds.
+  // if(Object.keys(parent.party).length == 0) {
+  //     log("Not in a party, trying to accept request");
+  //     accept_party_invite("KnossosTanks");
+  // }
+
+}, 5000); // Loops every 1/4 seconds.
 
 // Learn Javascript: https://www.codecademy.com/learn/introduction-to-javascript
 // Write your own CODE: https://github.com/kaansoral/adventureland

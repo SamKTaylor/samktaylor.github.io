@@ -1,10 +1,11 @@
 const LOOP_SPEED = 300;
-const LOGGING = false;
+const LOGGING = true;
 
 let AUTO_DEPOSIT = true;
 const DEPOSIT_THRESHOLD = 40000;
-const DEPOSIT_KEEP = 5000;
+const DEPOSIT_KEEP = 20000;
 const DEPOSIT_CHARACTER = "KnossosSells";
+const REQUIRED_PARTY_CHARACTERS = ["KnossosSells", "KnossosHeals", "KnossosStabs", "KnossosTanks"];
 let merchant = {};
 
 const HP_REGEN_AMOUNT = 50;
@@ -23,7 +24,7 @@ let MP_THRESHOLD = 0;
 let HP_REGEN_THRESHOLD = 0;
 let MP_REGEN_THRESHOLD = 0;
 
-let HEAL_THRESHOLD = 0.95;
+let HEAL_THRESHOLD = 0.99;
 let PARTY_HEAL_THRESHOLD = 0.5;
 
 const CRABS = {
@@ -50,10 +51,10 @@ const COOLDOWNS = {
   "partyheal": 10000,
   "revive": 200,
   "quickpunch": 2600,
-  "curse": 5100,
+  "curse": /*5100*/ 20000,
   "darkblessing": 60100,
-  "regen_hp": 3000,
-  "regen_mp": 3000
+  "regen_hp": 4000,
+  "regen_mp": 4000
 }
 
 let targetLastX = 0;
@@ -73,24 +74,32 @@ const l = (s) => {
 };
 
 function on_party_request(name) {
+  l("Party request from " + name);
   if (
     name.startsWith("Knossos") ||
     name.startsWith("McGreeb") ||
     name.startsWith("Movian") ||
     name.startsWith("Movien")
   ) {
+    l("Accept request from " + name);
     accept_party_invite(name);
+    setTimeout(() => accept_party_invite(name), 1000);
+    setTimeout(() => accept_party_invite(name), 2000);
   }
 }
 
 function on_party_invite(name) {
+  l("Party invite from " + name);
   if (
     name.startsWith("Knossos") ||
     name.startsWith("McGreeb") ||
     name.startsWith("Movian") ||
     name.startsWith("Movien")
   ) {
+    l("Accept invite from " + name);
     accept_party_request(name);
+    setTimeout(() => accept_party_request(name), 1000);
+    setTimeout(() => accept_party_request(name), 2000);
   }
 }
 
@@ -154,7 +163,6 @@ const healing = () => {
 const checkShouldDepositGold = () => {
   if (state.startsWith("TOWN")) return;
 
-  merchant = get_player(DEPOSIT_CHARACTER);
   if (!isMerchant() && merchant && distanceFrom(merchant) < 500) {
     if (character.gold > DEPOSIT_KEEP * 2) {
       send_gold(DEPOSIT_CHARACTER, character.gold - DEPOSIT_KEEP);
@@ -263,7 +271,7 @@ const isAMemberBelow = (members, factor) => {
   return new Promise((resolve, reject) => {
     let isDanger = false;
     members.forEach((item, i) => {
-      if(item && (item.hp / item.max_hp) < factor) {
+      if (item && (item.hp / item.max_hp) < factor) {
         isDanger = true;
       }
     });
@@ -336,6 +344,14 @@ const filterByMaxAttack = (monsters, maxAttack) => {
   return new Promise((resolve, reject) => {
     resolve(
       monsters.filter(entity => entity.attack < (maxAttack || 99999999))
+    )
+  });
+};
+
+const filterByMinXp = (monsters, minXp) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(entity => entity.xp > (minXp || 0))
     )
   });
 };
@@ -469,8 +485,9 @@ const combat = async () => {
       }
     } else {
       target = await getMonsters()
-        .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
-        .then(monsters => filterByMaxAttack(monsters, 200))
+        // .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
+        .then(monsters => filterByMaxAttack(monsters, 100))
+        .then(monsters => filterByMinXp(monsters, 500))
         .then(monsters => sortMonsters(monsters))
         .then(monsters => first(monsters));
       //target = get_nearest_monster();
@@ -491,7 +508,7 @@ const combat = async () => {
 
     let inDanger = await getPartyMembers()
       .then(members => isAMemberBelow(members, 0.7));
-    if(inDanger) return;
+    if (inDanger) return;
   }
 
   if (!target) {
@@ -589,6 +606,25 @@ setInterval(async () => {
     }, 5000);
   }
 
+  merchant = get_player(DEPOSIT_CHARACTER);
+  if (merchant && distanceFrom(merchant) < 1000) {
+    let items = {};
+    character.items.forEach((item, i) => {
+      if (!item) return;
+      items[item.name] = item.q || 1;
+    });
+    const MIN_POTIONS = 600;
+    if (!items["hpot0"] || items["hpot0"] < MIN_POTIONS) {
+      l("Buy " + (MIN_POTIONS - items["hpot0"]) + " health potions");
+      buy("hpot0", MIN_POTIONS - items["hpot0"]);
+    } else if (!items["mpot0"] || items["mpot0"] < MIN_POTIONS) {
+      l("Buy " + (MIN_POTIONS - items["mpot0"]) + " mana potions");
+      buy("mpot0", MIN_POTIONS - items["mpot0"]);
+    } else {
+      checkShouldDepositGold();
+    }
+  }
+
   if (is_transporting(character)) {
     l("Transporting home. Do nothing.");
     return;
@@ -602,7 +638,6 @@ setInterval(async () => {
   healing();
 
   loot();
-  checkShouldDepositGold();
 
   switch (state) {
     case "TOWN_GO":
@@ -668,18 +703,27 @@ setInterval(async () => {
       break;
   }
 
-  if (merchant && distanceFrom(merchant) < 500) {
-    let items = {};
-    character.items.forEach((item, i) => {
-      if (!item) return;
-      items[item.name] = item.q || 1;
-    });
-    if (items["hpot0"] < 600) {
-      buy("hpot0", 600 - items["hpot0"]);
-    }
-    if (items["mpot0"] < 600) {
-      buy("mpot0", 600 - items["mpot0"]);
-    }
-  }
+  // if(Object.keys(parent.party).length == 0) {
+  //     log("Not in a party, trying to accept request");
+  //     accept_party_invite(CALLER);
+  // }
 
 }, LOOP_SPEED);
+
+setInterval(async () => {
+  let partyMembers = await getPartyMembers()
+    .then(members => membersNotMe(members));
+
+  for(let i = 0; i < REQUIRED_PARTY_CHARACTERS.length; i++) {
+    let item = REQUIRED_PARTY_CHARACTERS[i];
+    if (item != character.id && !partyMembers.find(member => REQUIRED_PARTY_CHARACTERS.includes(member))) {
+      send_party_invite(item);
+      //return;
+    }
+  }
+  // REQUIRED_PARTY_CHARACTERS.forEach((item, i) => {
+  //   if (item != character.id && !partyMembers.find(member => REQUIRED_PARTY_CHARACTERS.includes(member))) {
+  //     send_party_invite(item);
+  //   }
+  // });
+}, 10000);
