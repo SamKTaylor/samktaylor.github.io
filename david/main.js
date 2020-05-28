@@ -19,6 +19,9 @@ const CLOSE_FOLLOW_DISTANCE = 10;
 let ATTACKING = true;
 let PRIEST_ATTACKING = true;
 
+let MONSTER_MIN_XP = 500;
+let MONSTER_MAX_ATTACK = 200;
+
 let HP_THRESHOLD = 0;
 let MP_THRESHOLD = 0;
 let HP_REGEN_THRESHOLD = 0;
@@ -242,6 +245,7 @@ const getPartyMembers = () => {
         members.push(entity);
       }
     });
+    CACHED_MEMBERS = members;
     resolve(members);
   });
 };
@@ -258,6 +262,7 @@ const getPartyMembersArray = () => {
       members.push(entity);
     }
   });
+  CACHED_MEMBERS = members;
   return members;
 };
 
@@ -326,8 +331,10 @@ const getMonsters = () => {
     Object.keys(parent.entities).forEach((item, i) => {
       entities.push(parent.entities[item]);
     });
+    entities = entities.filter(entity => entity.type == "monster" && entity.mtype && entity.mtype != "target" && !entity.dead && entity.visible);
+    CACHED_MONSTERS = entities;
     resolve(
-      entities.filter(entity => entity.type == "monster" && entity.mtype != "target" && !entity.dead && entity.visible)
+      entities
     )
   });
 };
@@ -344,6 +351,22 @@ const filterByMaxAttack = (monsters, maxAttack) => {
   return new Promise((resolve, reject) => {
     resolve(
       monsters.filter(entity => entity.attack < (maxAttack || 99999999))
+    )
+  });
+};
+
+const filterByBoss = (monsters) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(monsters => monsters.mtype == "phoenix")
+    )
+  });
+};
+
+const filterByCanMoveTo = (monsters) => {
+  return new Promise((resolve, reject) => {
+    resolve(
+      monsters.filter(entity => can_move_to(entity))
     )
   });
 };
@@ -485,12 +508,21 @@ const combat = async () => {
       }
     } else {
       target = await getMonsters()
-        // .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
-        .then(monsters => filterByMaxAttack(monsters, 100))
-        .then(monsters => filterByMinXp(monsters, 500))
-        .then(monsters => sortMonsters(monsters))
-        .then(monsters => first(monsters));
-      //target = get_nearest_monster();
+        .then(monsters => filterByBoss(monsters))
+        .then(monsters => first(monsters))
+        .catch(() => false);
+
+      if (!target) {
+        target = await getMonsters()
+          // .then(monsters => ATTACK_MTYPE == false ? monsters : filterByType(monsters, ATTACK_MTYPE))
+          .then(monsters => filterByMaxAttack(monsters, MONSTER_MAX_ATTACK))
+          .then(monsters => filterByMinXp(monsters, MONSTER_MIN_XP))
+          .then(monsters => filterByCanMoveTo(monsters))
+          .then(monsters => sortMonsters(monsters))
+          .then(monsters => first(monsters))
+          .catch(() => false);
+        //target = get_nearest_monster();
+      }
     }
 
 
@@ -604,6 +636,7 @@ setInterval(async () => {
         respawn();
       }
     }, 5000);
+    return;
   }
 
   merchant = get_player(DEPOSIT_CHARACTER);
@@ -711,10 +744,12 @@ setInterval(async () => {
 }, LOOP_SPEED);
 
 setInterval(async () => {
+  if (CALLER != character.id) return;
+
   let partyMembers = await getPartyMembers()
     .then(members => membersNotMe(members));
 
-  for(let i = 0; i < REQUIRED_PARTY_CHARACTERS.length; i++) {
+  for (let i = 0; i < REQUIRED_PARTY_CHARACTERS.length; i++) {
     let item = REQUIRED_PARTY_CHARACTERS[i];
     if (item != character.id && !partyMembers.find(member => REQUIRED_PARTY_CHARACTERS.includes(member))) {
       send_party_invite(item);
