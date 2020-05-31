@@ -1,0 +1,21 @@
+{
+  "name": "sam",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "webpack": "^4.43.0",
+    "webpack-cli": "^3.3.11"
+  },
+  "dependencies": {
+    "heap": "^0.2.6",
+    "heap-js": "^2.0.0",
+    "lodash": "^4.17.15"
+  }
+}
